@@ -391,7 +391,9 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
+        self.label_path = os.path.abspath(os.path.join(path, "../labels.txt"))          #! 这一行我自己加的，我将label.txt与train.txt放在了同一个目录下
 
+        #! 从train.txt加载训练数据
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:
@@ -413,8 +415,33 @@ class LoadImagesAndLabels(Dataset):
         except Exception as e:
             raise Exception(f'{prefix}Error loading data from {path}: {e}\nSee {HELP_URL}')
 
+
+        #! 加载labels，我自己改的
+        try:
+            f = []  # image files
+            for p in self.label_path if isinstance(self.label_path, list) else [self.label_path]:
+                p = Path(p)  # os-agnostic
+                if p.is_dir():  # dir
+                    f += glob.glob(str(p / '**' / '*.*'), recursive=True)
+                    # f = list(p.rglob('*.*'))  # pathlib
+                elif p.is_file():  # file
+                    with open(p) as t:
+                        t = t.read().strip().splitlines()
+                        parent = str(p.parent) + os.sep
+                        f += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
+                        # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
+                else:
+                    raise Exception(f'{prefix}{p} does not exist')
+            self.label_files = sorted(x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in ('txt'))
+            # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in IMG_FORMATS])  # pathlib
+            # assert self.label_files, f'{prefix}No labels Found'
+        except Exception as e:
+            raise Exception(f'{prefix}Error loading labels from {path}: {e}\nSee {HELP_URL}')
+
+
+
         # Check cache
-        self.label_files = img2label_paths(self.im_files)  # labels
+        # self.label_files = img2label_paths(self.im_files)  # labels
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix('.cache')
         try:
             cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
