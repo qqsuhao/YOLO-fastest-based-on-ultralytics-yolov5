@@ -366,6 +366,7 @@ def check_imshow():
 
 
 def check_suffix(file='yolov5s.pt', suffix=('.pt',), msg=''):
+    #! 检查文件后缀是否可接受
     # Check file(s) for acceptable suffix
     if file and suffix:
         if isinstance(suffix, str):
@@ -382,6 +383,7 @@ def check_yaml(file, suffix=('.yaml', '.yml')):
 
 
 def check_file(file, suffix=''):
+    #! 根据数据配置文件指定的路径，查看电脑中是否有该数据，如果没有会自动进行下载
     # Search/download file (if necessary) and return path
     check_suffix(file, suffix)  # optional
     file = str(file)  # convert to str()

@@ -51,14 +51,14 @@ def device_count():
 def select_device(device='', batch_size=0, newline=True):
     # device = 'cpu' or '0' or '0,1,2,3'
     s = f'YOLOv5 🚀 {git_describe() or file_update_date()} torch {torch.__version__} '  # string
-    device = str(device).strip().lower().replace('cuda:', '')  # to string, 'cuda:0' to '0'
+    device = str(device).strip().lower().replace('cuda:', '')  # to string, 'cuda:0' to '0'        #! 解析要使用哪几个gpu
     cpu = device == 'cpu'
     if cpu:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # force torch.cuda.is_available() = False
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # force torch.cuda.is_available() = False        #! 如果不使用gpu，修改环境变量，使gpu不可用
     elif device:  # non-cpu device requested
         os.environ['CUDA_VISIBLE_DEVICES'] = device  # set environment variable - must be before assert is_available()
         assert torch.cuda.is_available() and torch.cuda.device_count() >= len(device.replace(',', '')), \
-            f"Invalid CUDA '--device {device}' requested, use '--device cpu' or pass valid CUDA device(s)"
+            f"Invalid CUDA '--device {device}' requested, use '--device cpu' or pass valid CUDA device(s)"      #! 检查gpu是否可用
 
     cuda = not cpu and torch.cuda.is_available()
     if cuda:

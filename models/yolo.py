@@ -90,7 +90,7 @@ class Model(nn.Module):
             import yaml  # for torch hub
             self.yaml_file = Path(cfg).name
             with open(cfg, encoding='ascii', errors='ignore') as f:
-                self.yaml = yaml.safe_load(f)  # model dict
+                self.yaml = yaml.safe_load(f)  # model dict         #! 加载yaml
 
         # Define model
         ch = self.yaml['ch'] = self.yaml.get('ch', ch)  # input channels
@@ -100,18 +100,18 @@ class Model(nn.Module):
         if anchors:
             LOGGER.info(f'Overriding model.yaml anchors with anchors={anchors}')
             self.yaml['anchors'] = round(anchors)  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
+        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist    #! 解析yaml文件，创建网络模块对象
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
-        self.inplace = self.yaml.get('inplace', True)
+        self.inplace = self.yaml.get('inplace', True)       #? 这个参数的作用暂时不清楚
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()
-        if isinstance(m, Detect):
+        if isinstance(m, Detect):       #! 对detect网络层的一些参数进行设置
             s = 256  # 2x min stride
             m.inplace = self.inplace
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
-            check_anchor_order(m)
+            check_anchor_order(m)               #! 检查anchor的顺序
             self.stride = m.stride
             self._initialize_biases()  # only run once
 
@@ -120,7 +120,7 @@ class Model(nn.Module):
         self.info()
         LOGGER.info('')
 
-    def forward(self, x, augment=False, profile=False, visualize=False):
+    def forward(self, x, augment=False, profile=False, visualize=False):  #? 这几个参数的含义还不太清楚
         if augment:
             return self._forward_augment(x)  # augmented inference, None
         return self._forward_once(x, profile, visualize)  # single-scale inference, train
@@ -248,19 +248,20 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
 
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
     for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
-        m = eval(m) if isinstance(m, str) else m  # eval strings
+        m = eval(m) if isinstance(m, str) else m  #! eval strings
         for j, a in enumerate(args):
             try:
-                args[j] = eval(a) if isinstance(a, str) else a  # eval strings
+                args[j] = eval(a) if isinstance(a, str) else a  #! eval strings
             except NameError:
                 pass
-
-        n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
+        
+        ##! 针对不同的网络，设置不同的参数
+        n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain        #! n表示网络结构中网络层的深度
         if m in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
                  BottleneckCSP, C3, C3TR, C3SPP, C3Ghost]:
-            c1, c2 = ch[f], args[0]
-            if c2 != no:  # if not output
-                c2 = make_divisible(c2 * gw, 8)
+            c1, c2 = ch[f], args[0]             #! c1,c2分别为网络层的输入通道数和输出通道数
+            if c2 != no:  # if not output       #! 如果当前层不是输出层，使用make_divisible计算网络的输出通道数，也就是网络的宽度
+                c2 = make_divisible(c2 * gw, 8) #! gw宽度因子，用于调整网络的输出通道数
 
             args = [c1, c2, *args[1:]]
             if m in [BottleneckCSP, C3, C3TR, C3Ghost]:
@@ -280,17 +281,18 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             c2 = ch[f] // args[0] ** 2
         else:
             c2 = ch[f]
+        ##!
 
         m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace('__main__.', '')  # module type
-        np = sum(x.numel() for x in m_.parameters())  # number params
+        np = sum(x.numel() for x in m_.parameters())  # number params           #! 统计网络模块参数的数量
         m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
         LOGGER.info(f'{i:>3}{str(f):>18}{n_:>3}{np:10.0f}  {t:<40}{str(args):<30}')  # print
         save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
-        layers.append(m_)
+        layers.append(m_)       #! 把网络模型存放进layers
         if i == 0:
             ch = []
-        ch.append(c2)
+        ch.append(c2)       #! 将当前网络的输出通道记录下来，用于设置之后的网络参数
     return nn.Sequential(*layers), sorted(save)
 
 

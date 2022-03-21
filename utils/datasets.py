@@ -19,6 +19,7 @@ from zipfile import ZipFile
 
 import cv2
 import numpy as np
+from sympy import O
 import torch
 import torch.nn.functional as F
 import yaml
@@ -93,10 +94,11 @@ def exif_transpose(image):
 
 def create_dataloader(path, imgsz, batch_size, stride, single_cls=False, hyp=None, augment=False, cache=False, pad=0.0,
                       rect=False, rank=-1, workers=8, image_weights=False, quad=False, prefix='', shuffle=False):
+    #! path:存放样本路径的txt文档，例如train.txt，该路径是从yaml文件中解析出来的
     if rect and shuffle:
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
-    with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+    with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP  #! 这个函数是用来处理模型进行分布式训练时的同步问题
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                       augment=augment,  # augmentation
                                       hyp=hyp,  # hyperparameters
