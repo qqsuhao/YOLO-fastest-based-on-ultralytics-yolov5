@@ -6,6 +6,7 @@ Common modules
 import json
 import math
 import platform
+from turtle import forward
 import warnings
 from collections import OrderedDict, namedtuple
 from copy import copy
@@ -27,6 +28,63 @@ from utils.general import (LOGGER, check_requirements, check_suffix, check_versi
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import copy_attr, time_sync
 
+
+########################################################################!
+#! add these models for yolo fastest
+class CBL(nn.Module):
+    def __init__(self, c1, c2, ksize, stride, padding, groups=1, batchnorm=1, leakyrelu=1) -> None:
+        super().__init__()
+        bias = False if batchnorm else True
+        self.m = nn.Sequential()
+        self.m.add_module("conv", nn.Conv2d(c1, c2, kernel_size=ksize, stride=stride, padding=padding, groups=groups, bias=False))
+        if batchnorm:
+            self.m.add_module("BN", nn.BatchNorm2d(c2))
+        if leakyrelu:
+            self.m.add_module("LeakyReLu", nn.LeakyReLU(0.01))
+
+    def forward(self, x):
+        return self.m(x)
+
+
+class DW(nn.Module):
+    def __init__(self, c1, c2, c_mid, stride) -> None:
+        super().__init__()
+        self.m = nn.Sequential(
+            CBL(c1, c_mid, 1, 1, 0, 1, 1, 1),
+            CBL(c_mid, c_mid, 3, stride, 1, c_mid, 1, 1),
+            CBL(c_mid, c2, 1, 1, 0, 1, 1, 0),
+        )
+
+    def forward(self, x):
+        return self.m(x)
+
+
+class DWRes(nn.Module):
+    def __init__(self, c1, c2, c_mid, p=0.2) -> None:
+        super().__init__()
+        self.m = nn.Sequential(
+            DW(c1, c2, c_mid, 1),
+            nn.Dropout2d(p=p),
+        )
+
+    def forward(self, x):
+        return x+self.m(x)
+
+
+class SPPNet(nn.Module):
+    def __init__(self, size_list) -> None:
+        super().__init__()
+        self.m = []
+        for size in size_list:
+            self.m.append(nn.MaxPool2d(kernel_size=size, stride=1, padding=size // 2))
+
+    def forward(self, x):
+        out = [x]
+        for m in self.m:
+            out.append(m(x))
+        return torch.cat(out, dim=1)
+
+#########################################################################!
 
 def autopad(k, p=None):  # kernel, padding
     # Pad to 'same'

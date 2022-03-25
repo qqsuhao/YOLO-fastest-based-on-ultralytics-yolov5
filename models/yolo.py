@@ -279,10 +279,15 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
+        elif m in [CBL, DW, DWRes]:         #! 为了搭建yolo fastest 特别改动的代码
+            c1, c2 = ch[f], args[1]
+            args[0] = c1
+        elif m is SPPNet:                      #! 为了搭建yolo fastest 特别改动的代码
+            c2 = ch[f] * (len(args[0])+1)
         else:
             c2 = ch[f]
         ##!
-
+        
         m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace('__main__.', '')  # module type
         np = sum(x.numel() for x in m_.parameters())  # number params           #! 统计网络模块参数的数量
@@ -298,9 +303,10 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='yolov5s.yaml', help='model.yaml')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--profile', action='store_true', help='profile model speed')
+    # parser.add_argument('--cfg', type=str, default='yolov5s.yaml', help='model.yaml')
+    parser.add_argument('--cfg', type=str, default='yolo-fastest-xl-1.1.yaml', help='model.yaml')
+    parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--profile', action='store_falsegit ', help='profile model speed')
     parser.add_argument('--test', action='store_true', help='test all yolo*.yaml')
     opt = parser.parse_args()
     opt.cfg = check_yaml(opt.cfg)  # check YAML
@@ -316,13 +322,13 @@ if __name__ == '__main__':
         img = torch.rand(8 if torch.cuda.is_available() else 1, 3, 640, 640).to(device)
         y = model(img, profile=True)
 
-    # Test all models
-    if opt.test:
-        for cfg in Path(ROOT / 'models').rglob('yolo*.yaml'):
-            try:
-                _ = Model(cfg)
-            except Exception as e:
-                print(f'Error in {cfg}: {e}')
+    # # Test all models
+    # if opt.test:
+    #     for cfg in Path(ROOT / 'models').rglob('yolo*.yaml'):
+    #         try:
+    #             _ = Model(cfg)
+    #         except Exception as e:
+    #             print(f'Error in {cfg}: {e}')
 
     # Tensorboard (not working https://github.com/ultralytics/yolov5/issues/2898)
     # from torch.utils.tensorboard import SummaryWriter
