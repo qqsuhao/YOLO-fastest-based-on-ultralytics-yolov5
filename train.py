@@ -455,8 +455,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default=ROOT / 'yolov5s.pt', help='initial weights path')                        #! 模型与训练权重
-    parser.add_argument('--cfg', type=str, default='yolov5s_voc.yaml', help='model.yaml path')                                  #! 模型的配置文件
+    parser.add_argument('--weights', type=str, default=ROOT / "runs/train/yolofastestxl-epoch-400-500/weights/best.pt", help='initial weights path')                        #! 模型与训练权重
+    parser.add_argument('--cfg', type=str, default='yolo-fastest-xl.yaml', help='model.yaml path')                                  #! 模型的配置文件
     parser.add_argument('--data', type=str, default=ROOT / 'data/mydata_voc.yaml', help='dataset.yaml path')                    #! 数据集配置文件
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.VOC.yaml', help='hyperparameters path')                #! 超参数配置文件
     parser.add_argument('--epochs', type=int, default=100)                                                                      #! 迭代次数

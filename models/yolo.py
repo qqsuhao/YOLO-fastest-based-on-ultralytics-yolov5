@@ -306,7 +306,7 @@ if __name__ == '__main__':
     # parser.add_argument('--cfg', type=str, default='yolov5s.yaml', help='model.yaml')
     parser.add_argument('--cfg', type=str, default='yolo-fastest-xl-1.1.yaml', help='model.yaml')
     parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--profile', action='store_falsegit ', help='profile model speed')
+    parser.add_argument('--profile', action='store_false', help='profile model speed')
     parser.add_argument('--test', action='store_true', help='test all yolo*.yaml')
     opt = parser.parse_args()
     opt.cfg = check_yaml(opt.cfg)  # check YAML
@@ -319,7 +319,7 @@ if __name__ == '__main__':
 
     # Profile
     if opt.profile:
-        img = torch.rand(8 if torch.cuda.is_available() else 1, 3, 640, 640).to(device)
+        img = torch.rand(8 if torch.cuda.is_available() else 1, 3, 320, 320).to(device)
         y = model(img, profile=True)
 
     # # Test all models
