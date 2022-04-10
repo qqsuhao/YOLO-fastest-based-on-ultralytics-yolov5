@@ -1,3 +1,25 @@
+# YOLO-fastest-xl Based on Framework of YOLOv5
+
+- Use Framework of YOLOv5 to train YOLO-fastest-xl(verson1.0), which is a light backbone network released by dog-qiuqiu (https://github.com/dog-qiuqiu/Yolo-Fastest)
+
+- Change the dataload part. When load dataset, must use train.txt and corresponding label.txt.
+
+- The YOLO-fastest-xl is configed in models/yolo-fastest-xl.yaml.
+
+- Add a param "half" in train.py to control whether use half precision when training.
+
+- In dog-qiuqiu/Yolo-Fastest, YOLO-fastest-xl can get mAP 68% on VOC dataset. But in this code, we only can get mAP 64.5% without half precison. When use half precison, the mAP is 60%. All training logs are save in runs/train/* .
+
+- The training results without half precison is as follows. We train the model for 500 epoches and then train it for 300 epoches again, total 800 epoches.
+![results](runs/train/yolo-fastest-xl-500-nohalf/results.png)
+![results](runs/train/yolo-fastest-xl-500-800-nohalf/results.png)
+
+
+---
+
+---
+
+
 <div align="center">
 <p>
    <a align="left" href="https://ultralytics.com/yolov5" target="_blank">

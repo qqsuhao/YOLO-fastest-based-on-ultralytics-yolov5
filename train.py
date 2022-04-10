@@ -67,9 +67,9 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
           device,
           callbacks
           ):
-    save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, nosave, workers, freeze = \
+    save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, nosave, workers, freeze, half = \
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.weights, opt.single_cls, opt.evolve, opt.data, opt.cfg, \
-        opt.resume, opt.noval, opt.nosave, opt.workers, opt.freeze
+        opt.resume, opt.noval, opt.nosave, opt.workers, opt.freeze, opt.half
 
     # Directories
     w = save_dir / 'weights'  # weights dir                                                     #! 在日志文件夹中建立模型权重文件夹
@@ -249,7 +249,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             # Anchors
             if not opt.noautoanchor:
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)               #! 如果不使用自动anchor，则根据标签进行计算
-            model.half().float()  # pre-reduce anchor precision
+            model.half().float() if half else model.float()  # pre-reduce anchor precision
 
         callbacks.run('on_pretrain_routine_end')
 
@@ -276,7 +276,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     maps = np.zeros(nc)  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
-    scaler = amp.GradScaler(enabled=cuda)                                               #! 梯度量化
+    if half: scaler = amp.GradScaler(enabled=cuda)                                               #! 梯度量化
     stopper = EarlyStopping(patience=opt.patience)                                      #! 早停
     compute_loss = ComputeLoss(model)  # init loss class                                #! 计算模型损失 初始化
     LOGGER.info(f'Image sizes {imgsz} train, {imgsz} val\n'
@@ -327,22 +327,34 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
                     imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
-            # Forward
-            with amp.autocast(enabled=cuda):
+            if half:
+                # Forward
+                with amp.autocast(enabled=cuda):
+                    pred = model(imgs)  # forward                                                                               #! 模型前向推理
+                    loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size                      #! 计算损失
+                    if RANK != -1:
+                        loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
+                    if opt.quad:
+                        loss *= 4.
+                # Backward
+                scaler.scale(loss).backward()                                                               #! 反向传播
+            else:
                 pred = model(imgs)  # forward                                                                               #! 模型前向推理
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size                      #! 计算损失
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
                     loss *= 4.
-
-            # Backward
-            scaler.scale(loss).backward()                                                               #! 反向传播
-
+                # Backward
+                loss.backward()         
+                
             # Optimize
             if ni - last_opt_step >= accumulate:                                #! 梯度累加
-                scaler.step(optimizer)  # optimizer.step
-                scaler.update()
+                if half:
+                    scaler.step(optimizer)  # optimizer.step
+                    scaler.update()
+                else:
+                    optimizer.step()
                 optimizer.zero_grad()
                 if ema:
                     ema.update(model)
@@ -377,6 +389,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                                            dataloader=val_loader,
                                            save_dir=save_dir,
                                            plots=False,
+                                           half=half,
                                            callbacks=callbacks,
                                            compute_loss=compute_loss)
 
@@ -391,8 +404,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             if (not nosave) or (final_epoch and not evolve):  # if save
                 ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
-                        'model': deepcopy(de_parallel(model)).half(),
-                        'ema': deepcopy(ema.ema).half(),
+                        'model': deepcopy(de_parallel(model)).half() if half else deepcopy(de_parallel(model)),
+                        'ema': deepcopy(ema.ema).half() if half else deepcopy(ema.ema),
                         'updates': ema.updates,
                         'optimizer': optimizer.state_dict(),
                         'wandb_id': loggers.wandb.wandb_run.id if loggers.wandb else None,
@@ -433,13 +446,14 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     results, _, _ = val.run(data_dict,
                                             batch_size=batch_size // WORLD_SIZE * 2,
                                             imgsz=imgsz,
-                                            model=attempt_load(f, device).half(),
+                                            model=attempt_load(f, device).half() if half else attempt_load(f, device),
                                             iou_thres=0.65 if is_coco else 0.60,  # best pycocotools results at 0.65
                                             single_cls=single_cls,
                                             dataloader=val_loader,
                                             save_dir=save_dir,
                                             save_json=is_coco,
                                             verbose=True,
+                                            half=half,
                                             plots=True,
                                             callbacks=callbacks,
                                             compute_loss=compute_loss)  # val best model with plots
@@ -455,13 +469,14 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default=ROOT / "runs/train/yolofastestxl-epoch-400-500/weights/best.pt", help='initial weights path')                        #! 模型与训练权重
+    parser.add_argument('--weights', type=str, default=None, help='initial weights path')                        #! 模型与训练权重
     parser.add_argument('--cfg', type=str, default='yolo-fastest-xl.yaml', help='model.yaml path')                                  #! 模型的配置文件
     parser.add_argument('--data', type=str, default=ROOT / 'data/mydata_voc.yaml', help='dataset.yaml path')                    #! 数据集配置文件
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.VOC.yaml', help='hyperparameters path')                #! 超参数配置文件
-    parser.add_argument('--epochs', type=int, default=100)                                                                      #! 迭代次数
-    parser.add_argument('--batch-size', type=int, default=128, help='total batch size for all GPUs, -1 for autobatch')          #! batchsize
+    parser.add_argument('--epochs', type=int, default=300)                                                                      #! 迭代次数
+    parser.add_argument('--batch-size', type=int, default=64, help='total batch size for all GPUs, -1 for autobatch')          #! batchsize
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=320, help='train, val image size (pixels)')         #! 输入图像尺寸
+    parser.add_argument('--half', type=bool, default=False, help="whether use half precison training")                #! 是否使用混合精度
     parser.add_argument('--rect', action='store_true', help='rectangular training')                                             #* action表示该参数为一个开关参数，在IDE下运行代码默认为False
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')                   #! 用于恢复最近的训练
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')                                     #! 只保存最后一个断点
@@ -474,7 +489,7 @@ def parse_opt(known=False):
     parser.add_argument('--device', default='0,1', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')                                #! 使用的GPU，若要使用多块，只需要设置为“0,1"这样子
     parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')                                    #! 是否多尺度训练
     parser.add_argument('--single-cls', action='store_true', help='train multi-class data as single-class')                     #! 是否之进行目标检测，不进行分类
-    parser.add_argument('--optimizer', type=str, choices=['SGD', 'Adam', 'AdamW'], default='SGD', help='optimizer')             #! 使用哪一种优化器
+    parser.add_argument('--optimizer', type=str, choices=['SGD', 'Adam', 'AdamW'], default='Adam', help='optimizer')             #! 使用哪一种优化器
     parser.add_argument('--sync-bn', action='store_false', help='use SyncBatchNorm, only available in DDP mode')                 #? 多卡训练时最好开启该参数设置
     parser.add_argument('--workers', type=int, default=8, help='max dataloader workers (per RANK in DDP mode)')                 #! 线程数
     parser.add_argument('--project', default=ROOT / 'runs/train', help='save to project/name')
