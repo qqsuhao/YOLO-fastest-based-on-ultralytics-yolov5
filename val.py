@@ -316,7 +316,7 @@ def run(data,
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=str, default=ROOT / 'data/mydata_voc.yaml', help='dataset.yaml path')
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/yolo-fastest-xl-500-700-nohalf/weights/best.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/train/yolo-fastest-xl-500-800-nohalf/weights/best.pt', help='model.pt path(s)')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=320, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='confidence threshold')
