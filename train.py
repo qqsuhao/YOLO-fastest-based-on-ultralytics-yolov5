@@ -40,7 +40,7 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative      #! 当前文件�
 
 import val  # for end-of-epoch mAP
 from models.experimental import attempt_load
-from models.yolo import Model
+from models.yolo_ortho import Model
 from utils.autoanchor import check_anchors
 from utils.autobatch import check_train_batch_size
 from utils.callbacks import Callbacks
@@ -52,7 +52,7 @@ from utils.general import (LOGGER, check_dataset, check_file, check_git_status, 
                            print_args, print_mutation, strip_optimizer)
 from utils.loggers import Loggers
 from utils.loggers.wandb.wandb_utils import check_wandb_resume
-from utils.loss import ComputeLoss
+from utils.loss import ComputeLoss, Ortho_loss
 from utils.metrics import fitness
 from utils.plots import plot_evolve, plot_labels
 from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, select_device, torch_distributed_zero_first
@@ -341,6 +341,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             else:
                 pred = model(imgs)  # forward                                                                               #! 模型前向推理
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size                      #! 计算损失
+                ortholoss = Ortho_loss(model)
+                loss += ortholoss * 0.01
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -364,8 +366,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             if RANK in [-1, 0]:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G'  # (GB)
-                pbar.set_description(('%10s' * 2 + '%10.4g' * 5) % (
-                    f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
+                pbar.set_description(('%10s' * 2 + '%10.4g' * 6) % (
+                    f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1], ortholoss))
                 callbacks.run('on_train_batch_end', ni, model, imgs, targets, paths, plots, opt.sync_bn)
                 if callbacks.stop_training:
                     return
@@ -470,7 +472,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default=None, help='initial weights path')                        #! 模型与训练权重
-    parser.add_argument('--cfg', type=str, default='yolo-fastest-xl.yaml', help='model.yaml path')                                  #! 模型的配置文件
+    parser.add_argument('--cfg', type=str, default='yolo-fastest-xl-ortho.yaml', help='model.yaml path')                                  #! 模型的配置文件
     parser.add_argument('--data', type=str, default=ROOT / 'data/mydata_voc.yaml', help='dataset.yaml path')                    #! 数据集配置文件
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.VOC.yaml', help='hyperparameters path')                #! 超参数配置文件
     parser.add_argument('--epochs', type=int, default=300)                                                                      #! 迭代次数

@@ -8,6 +8,34 @@ import torch.nn as nn
 
 from utils.metrics import bbox_iou
 from utils.torch_utils import de_parallel
+from torch.nn.functional import normalize
+
+
+def Ortho_loss(model, option=0):
+    loss = 0
+    for i in model.named_parameters():
+        if "ortho" in i[0]:
+            w = i[1]        #! w的第一个维度表示输出通道数
+            w = torch.squeeze(w)
+            w = normalize(w, dim=1)
+            ww = torch.matmul(w, w.t())
+            eye = torch.zeros_like(ww)
+            index = [j for j in range(eye.size(0))]
+            eye[index, index] = 1
+            if option==0:
+                l = torch.norm(ww-eye, p=2)
+                loss += l
+            elif option==1:
+                w_tmp = (ww-eye)
+                height = w_tmp.size(0)
+                u = normalize(w_tmp.new_empty(height).normal_(0,1), dim=0, eps=1e-12)
+                v = normalize(torch.matmul(w_tmp.t(), u), dim=0, eps=1e-12)
+                u = normalize(torch.matmul(w_tmp, v), dim=0, eps=1e-12)
+                sigma = torch.dot(u, torch.matmul(w_tmp, v))
+                l2_reg = (sigma)**2
+                loss += l2_reg
+    return loss
+
 
 
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441

@@ -9,7 +9,7 @@
 #    metrics/precision,       metrics/recall,      metrics/mAP_0.5, metrics/mAP_0.5:0.95,         val/box_loss,         val/obj_loss,         val/cls_loss
 #              0.87729,              0.85125,              0.91286,              0.72664,            0.0076739,            0.0042529,            0.0013865
 
-lr0: 0.00008
+lr0: 0.001
 lrf: 0.15135
 momentum: 0.74832
 weight_decay: 0.00025
