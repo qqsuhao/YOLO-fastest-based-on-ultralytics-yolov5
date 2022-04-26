@@ -11,7 +11,7 @@ from utils.torch_utils import de_parallel
 from torch.nn.functional import normalize
 
 
-def Ortho_loss(model, option=0):
+def Ortho_loss(model, option=3):
     loss = 0
     for i in model.named_parameters():
         if "ortho" in i[0]:
@@ -34,6 +34,12 @@ def Ortho_loss(model, option=0):
                 sigma = torch.dot(u, torch.matmul(w_tmp, v))
                 l2_reg = (sigma)**2
                 loss += l2_reg
+            elif option==3:
+                size = w.size(0)
+                w1 = w[0:size // 6 * 2, :]
+                w2 = w[size//6*2:, :]
+                l = torch.norm(torch.matmul(w1, w2.t()))
+                loss += l
     return loss
 
 

@@ -342,7 +342,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 pred = model(imgs)  # forward                                                                               #! 模型前向推理
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size                      #! 计算损失
                 ortholoss = Ortho_loss(model)
-                loss += ortholoss * 0.01
+                loss += ortholoss * 0.1
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -475,7 +475,7 @@ def parse_opt(known=False):
     parser.add_argument('--cfg', type=str, default='yolo-fastest-xl-ortho.yaml', help='model.yaml path')                                  #! 模型的配置文件
     parser.add_argument('--data', type=str, default=ROOT / 'data/mydata_voc.yaml', help='dataset.yaml path')                    #! 数据集配置文件
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.VOC.yaml', help='hyperparameters path')                #! 超参数配置文件
-    parser.add_argument('--epochs', type=int, default=300)                                                                      #! 迭代次数
+    parser.add_argument('--epochs', type=int, default=600)                                                                      #! 迭代次数
     parser.add_argument('--batch-size', type=int, default=64, help='total batch size for all GPUs, -1 for autobatch')          #! batchsize
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=320, help='train, val image size (pixels)')         #! 输入图像尺寸
     parser.add_argument('--half', type=bool, default=False, help="whether use half precison training")                #! 是否使用混合精度
